@@ -8,3 +8,6 @@
 [ ] Add created and updated information to the individual posts
 [ ] Create a contact page template
 [ ] Create a projects page template
+[x] SCP files from local to remote
+[ ] Create and generate all the listings using templates
+[ ] Parse markdown to html
