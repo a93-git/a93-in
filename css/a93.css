@@ -1,0 +1,43 @@
+html * {
+  font-family: 'IBM Plex Sans', sans-serif; 
+  background: black;
+  color: white;
+}
+
+#outermost-div {
+  padding: 40px;
+}
+
+::selection {
+  color: black;
+  background: white;
+}
+
+a {
+  text-decoration: none;
+}
+
+a:hover {
+  color: black;
+  background: white;
+}
+
+.navbar-ul {
+	list-style-type: none;
+	overflow: hidden;
+	font-size: 64px;
+	font-weight: bold;
+	display: grid;
+	margin: 0;
+	padding: 0;
+	grid-template-columns: auto auto auto;
+	column-gap: 10px;
+}
+
+.navbar-li {
+	justify-self: center;
+}
+
+.navbar-a {
+	display: block;
+}

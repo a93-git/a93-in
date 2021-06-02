@@ -44,12 +44,12 @@ a:hover {
 	list-style-type: none;
 	overflow: hidden;
 	font-size: 64px;
-	font-weight: 600;
+	font-weight: bold;
 	display: grid;
 	margin: 0;
 	padding: 0;
 	grid-template-columns: auto auto auto;
-	column-gap: 20px;
+	column-gap: 10px;
 }
 
 .navbar-li {
@@ -160,31 +160,4 @@ a:hover {
 /* *******************************
  * End of responsiveness section *
  * *******************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
