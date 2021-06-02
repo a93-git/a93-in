@@ -20,11 +20,9 @@
       <div class="center-grid">
         <div class="posts-list">
           <ul>
-            
-              <p><a href=posts/post2.html>This is the post2</a></p>
-            
-              <p><a href=posts/post1.html>This is the POST 1</a></p>
-            
+            <% post_links.each do |link| %>
+              <%= link.strip %>
+            <% end %>
           </ul>
         </div>
       </div>
