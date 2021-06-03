@@ -9,7 +9,8 @@
   ],
 
   "exclude": [
-    ".md$"
+    ".md$",
+    ".swp$"
   ],
 
   "markdown_paths": [
