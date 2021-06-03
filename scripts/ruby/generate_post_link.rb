@@ -4,7 +4,7 @@ require 'erb'
 BASE_DIR = $0.split("/")[0..-2].join("/")
 load "#{BASE_DIR}/generate.rb"
 
-if (ARGV[0] == nil or ARGV[1] == nil)
+if (ARGV[0] == nil or ARGV[1] == nil or ARGV[2] == nil)
   puts "Directory path and template file and the file to update are reuiqred"
   puts "Missing required arguments"
   puts "Usage: ruby generate_post_link.rb <dir with posts> <template> <file to generate>"
