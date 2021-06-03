@@ -42,4 +42,11 @@ config file
 - [x] SCP files from local to remote
 - [x] Create and generate all the listings using templates
 - [x] Parse markdown to html
-- [ ] Add provision to exclude files in .scpconfig
+- [x] Add provision to exclude files in .scpconfig
+- [ ] Add error handling to the link generator
+- [ ] Extract proper header files from the posts
+- [ ] Fix the font size of the listings
+- [ ] Center the contents on all the pages
+- [ ] Add formatting to the HTML generated from the markdown
+- [ ] Automatically add classes to the HTML generated from the markdown
+- [ ] Add navigation link to the posts page
