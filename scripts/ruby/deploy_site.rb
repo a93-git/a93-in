@@ -47,9 +47,7 @@ markdown_paths.each do |path|
     end
   end
 end
-puts "Done generating HTML from markdown files..."
-
-puts ""
+puts "Done generating HTML from markdown files...", ""
 
 generator = GenerateFileTree.new("", scp_exclude_paths)
 
@@ -76,12 +74,38 @@ puts files_to_scp
 
 puts ""
 
+# Create remote folders that don't exist
+puts "Initiating remote connection..."
+Net::SSH.start("a93", "abhishek") do |ssh|
+  puts "Delete any files existing in the webserver's root"
+  output = ssh.exec!("find #{webserver_path} -type f -print0 | xargs -0 /bin/rm -f")
+  puts "Output of file deletion on webserver", output, ""
+
+  puts "Current files at webserver root path on remote server"
+  output = ssh.exec!("ls -la #{webserver_path}")
+  puts output, ""
+  
+  puts "Checking for remote folders..."
+  checked = []
+  # A path once checked won't be checked again
+  files_to_scp.each do |file|
+    path = file.split[1].split("/")[0..-2].join("/") 
+    unless checked.include?(path)
+      puts "Checking if #{path} exists on remote server. If not it will be created"
+      ssh.exec!("mkdir -p #{path}")
+      checked << path 
+    end
+  end
+
+  puts "Changing the ownership of files"
+  output = ssh.exec!("sudo chown -R $USER:$USER #{webserver_path}; ls -laR #{webserver_path}")
+  puts output, "Done", ""
+end
+puts "Done checking for remote folders", ""
+
 # scp files from local to remote system
-# TODO Create remote folders that don't exist
 puts "Copying files to the webserver"
-
 transfer = {}
-
 Net::SCP.start("a93", "abhishek") do |scp|
   files_to_scp.each do |line|
     puts line
