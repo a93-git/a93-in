@@ -3,19 +3,21 @@ require 'json'
 
 BASE_DIR = $0.split("/")[0..-2].join("/")
 load "#{BASE_DIR}/parse_markdown.rb"
+load "#{BASE_DIR}/generate_file_tree.rb"
 
 # Read the configuration JSON file
 fh = File.open(".scpconfig.json")
 config_json = JSON.parse(fh.read)
-
 scp_paths = config_json["scp"]
 scp_exclude_paths = config_json["exclude"]
 markdown_paths = config_json["markdown_paths"]
+webserver_path = config_json["webserver"]
+fh.close
 
 # Generate the templates into HTML files
 puts "Generating the static files from templates..."
-`ruby scripts/ruby/generate_post_link.rb projects/ templates/projects.html.erb projects.html`
-`ruby scripts/ruby/generate_post_link.rb posts/ templates/index.html.erb index.html`
+`ruby scripts/ruby/generate_post_link.rb html/projects/ templates/projects.html.erb projects.html`
+`ruby scripts/ruby/generate_post_link.rb html/posts/ templates/index.html.erb index.html`
 puts "Static file generation complete..."
 
 puts ""
@@ -49,52 +51,33 @@ puts "Done generating HTML from markdown files..."
 
 puts ""
 
-# This function recursively lists the files in the directory provided
-# If the first path provided is a file, the same path is returned
-def rec_listing(path, file_list)
-  Dir.open(path).children.each do |child|
-    filepath = "#{path}/#{child}"
-    if File.directory?(filepath)
-      rec_listing(filepath, file_list)
-    else
-      file_list << filepath if /\.md/.match(filepath) == nil
-    end
-  end
-  file_list
-rescue  Errno::ENOTDIR => e
-  puts "#{path} is not a directory. Returning the same path"
-  [path]
-rescue Exception => e
-  puts e.message
-  puts e.class
-  raise
-end
+generator = GenerateFileTree.new("", scp_exclude_paths)
 
-# This array carries individual local and remote file paths 
-files_to_scp = []
 # For each path and destination line in the configfile
-scp_paths.each do |line|
-  x = []
-  path = line.split  
+scp_paths.each do |path|
   # We are getting the list of files eligible for transfer
   begin
-    rec_listing(path[0], x).each do |i|
-      # Re-creating the space separated format of source and destination
-      # The remote path contains the exact destination of each file
-      m = "#{i} #{path[1]}/#{i}"
-      files_to_scp << m
-    end
+    generator.rec_listing(path)
   rescue NoMethodError => e
-    puts "Skipping #{path[0]} as it is not a directory"
+    puts "Skipping #{path[0]} as it couldn't be parsed", ""
+  rescue Exception => e
+    puts e.message, e.class, ""
   end
 end
 
-### TODO It won't copy the files to correct location on webserver
-### TODO The folder structure needs to be updated for destination as well
+files_to_scp = generator.file_list
+
+count = 0
+while count < files_to_scp.count
+  files_to_scp[count] = "#{files_to_scp[count]} #{webserver_path}/#{files_to_scp[count]}"
+  count += 1
+end
+puts files_to_scp
 
 puts ""
 
 # scp files from local to remote system
+# TODO Create remote folders that don't exist
 puts "Copying files to the webserver"
 
 transfer = {}
