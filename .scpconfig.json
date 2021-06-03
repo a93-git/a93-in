@@ -1,0 +1,19 @@
+{
+  "scp": [
+    "index.html /var/www/a93_in",
+    "css /var/www/a93_in",
+    "posts /var/www/a93_in",
+    "html /var/www/a93_in",
+    "projects /var/www/a93_in",
+    "projects.html /var/www/a93_in"
+  ],
+
+  "exclude": [
+    ".md"
+  ],
+
+  "markdown_paths": [
+    "posts/",
+    "projects"
+  ]
+}
