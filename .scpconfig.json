@@ -1,11 +1,14 @@
 {
   "webserver": "/var/www/a93_in",
 
-  "scp": [
+  "upload": [
     "index.html",
     "css",
     "html",
-    "projects.html"
+    "projects.html",
+    "contact.html",
+    "form.rb",
+    "cgi-bin"
   ],
 
   "exclude": [
@@ -15,5 +18,12 @@
 
   "markdown_paths": [
     "html"
-  ]
+  ],
+
+  "markdown_include": [
+    ".md$"],
+
+    "download": {
+      "messages"
+    }
 }
