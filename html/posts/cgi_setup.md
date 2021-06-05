@@ -609,5 +609,114 @@ and that should be enough for my use case :)
 
 ## Receiving notifications on new messages
 
+In order to be able to trigger a lambda function, we need to have a function in the 
+first place. We will start with creating a function on the local system and then 
+deploying it using AWS CLI (which will use the IAM role attached the EC2 instance 
+for credentials). We will use AWS CLI to test this function and after that we will 
+set up the dynamo DB triggers
+
+Let's start with a barebones lambda function by creating a file named lambda_handler.rb
+ that contains the following code:
+
+```
+def lambda_handler(event:, context:)
+  puts "Yo"                                                                                          
+end                                                                                                  
+```
+
+This function in its current state will simply print "Yo" when tested. We will 
+flesh out this function in due time. For now we will deploy this function to 
+get the workflow setup. For that we will create a Ruby script that zips the 
+function code along with dependencies and uploads it to AWS Lambda to create 
+a function.
+
+1. Zip the function code. To do this we will need to install the `rubyzip` gem 
+using `sudo gem install rubyzip`. Add the following code to the deployment Ruby 
+script (not the lambda function code)
+
+```ruby
+require 'zip'                                                                                         
+                                                                                                      
+files_to_zip = ARGV[0..-2]                                                                            
+zip_filename = ARGV[-1]                                                                               
+                                                                                                      
+files_to_zip.each do |fn|                                                                             
+  Zip::File.open("#{zip_filename}.zip", Zip::File::CREATE) do |zfh|                                   
+    zfh.get_output_stream("#{fn}") do |fh|                                                            
+      fh.write(File.open("#{fn}").read)                                                               
+    end                                                                                               
+  end                                                                                                 
+end
+```
+
+In the above code snippet, we are taking in a list of files that need to be 
+zipped along with the zip filename and then we iterate through each of the files 
+provided as the argument and add them to the zip filename. If the zip file doesn't 
+exist, it will be created. If it exists, files will be added to it. The `get_output_stream` 
+method opens a handle to a file `#{fn}` inside the newly created/opened zip 
+file to which we then dump the contents of the `#{fn}` file as provided on the 
+commandline. Using the same variable name at both places ensures that the filename 
+is same inside zip file as well. The problem with the above script is that it doesn't 
+zip directories. If we provide it with a directory, it will throw an error. In order 
+to fix that I am going to use the file tree generating class from my previous post 
+and `require` it into my current file to access it. After using it, the code looks like:
+
+```
+require 'zip'
+require './generate_file_tree'
+
+class NoFilesToZip < Exception
+end
+
+class NoZipFileName < Exception
+end
+
+files = ARGV[0..-2]
+zip_filename = ARGV[-1]
+
+raise NoFilesToZip unless files == nil
+raise NoZipFileName unless zip_filename == nil
+
+begin
+  files_to_zip = []
+  files.each do |fn|
+    if File.directory?(fn)
+      files_to_zip += GenerateFileTree.new([]).rec_listing(fn)
+    else
+      files_to_zip << fn
+    end
+  end
+ensure
+  files_to_zip
+end
+
+files_to_zip.each do |fn|
+  puts "Compressing #{fn}..."
+  Zip::File.open("#{zip_filename}.zip", Zip::File::CREATE) do |zfh|
+    zfh.get_output_stream("#{fn}") do |fh|
+      fh.write(File.open("#{fn}").read)
+    end
+  end
+end
+```
+
+In the modified code for zipping files, we have add our generate_file_tree class 
+and we are using it to get all the files recursively. In the constructor we see
+that there is an empty array passed, that is supposed to be a list of regex strings 
+to exclude from the file list. Here we are not excluding anything. Once we have 
+the list of files to zip, we are proceeding as before to add all of them to the zip 
+file. Notice that I have added a puts statement within the `files_to_zip` block to 
+print out the name of the file it is currently compressing.
+
+Besides these modifications, I have also added two error classes to denote that either
+ the list of files to zip is missing or the zip filename is missing - in either case 
+an error will be raised. We could have used a single error class here but I chose 
+to go with two to emphasize that the first file is the one to be zipped and the last 
+one will be the name of the zip file i.e. if only one parameter is provided it 
+will throw the `NoZipFileName` error and if zero parameters are provided it will 
+throw `NoFilesToZip` error.
+
+Now that we have our zip functionlity, we need to use it to create a deployment package 
+and create a lambda function.
 
 
