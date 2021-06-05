@@ -930,4 +930,71 @@ we iterate through the list of files and keep adding it to our archive file.
 The `private` keyword at the bottom is used to signify that the following method names 
 are private.
 
+Now that we are done with the refactoring for now, let's see what changes we need 
+to make to the EC2 role and the lambda execution role. To allow the bearer of the 
+instance role to be able to publish a version, list and invoke the lambda function, 
+update the lambda policy attached to the EC2 role with the following statement:
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:CreateFunction",
+                "iam:PassRole",
+                "lambda:InvokeFunction",
+                "lambda:PublishVersion"
+            ],
+            "Resource": [
+                "arn:aws:lambda:us-east-1:979558485280:function:a93_message_handler",
+                "arn:aws:iam::979558485280:role/a93_messaging_lambda_role"
+            ]
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": "lambda:ListFunctions",
+            "Resource": "*"
+        }
+    ]
+}
+
+This policy has permissions to invoke and publish only our message handler function 
+and to list functions in our account.
+
+In order to allow our Lambda function to create a log group, and then a log stream 
+and then allow it to put log events into it, we will attach an AWS managed policy
+ "AWSLambdaBasicExecutionRole" that has the policy for our exact requirements. The 
+policy statement in this policy reads:
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+The "\*" in the `Resource` section is what makes this policy attachable to any 
+Lambda function (meaning the lambda function can create a log group and stream 
+for itself), and, since creation of log streams and putting events there is 
+handled by AWS (we can also do that, be we won't), we can trust it to not put 
+spammy logs :)
+
+With that we have the required policies in place, our script is working as expected 
+and we have tested our function by invoking it from the console. Let's add the 
+functionality to list the functions in our account and then to invoke our 
+function from our ruby script
+
 
