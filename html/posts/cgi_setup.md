@@ -2,7 +2,7 @@
 
 While building this blog, I had to be able to store the messages that visitors 
 decided to send me. So, I decided to use [CGI](https://httpd.apache.org/docs/current/howto/cgi.html) scripts to process the form data and 
-store the messages in [dynamo db](https://aws.amazon.com/dynamodb/) (for free, thanks to AWS's free tier offering).
+store the messages in [DynamoDB](https://aws.amazon.com/dynamodb/) (for free, thanks to AWS's free tier offering).
 
 ## Setting up CGI on Apache webserver running on Ubuntu 20.04
 You can get started with [setting up Apache to run CGI script](https://httpd.apache.org/docs/current/howto/cgi.html) by following the link and here I am presenting the steps that I had to follow 
@@ -147,8 +147,8 @@ this feature using CSS.
 
 ## Redirecting to the same page with "Message submitted" notice
 
-## Saving the data to dynamo db
-To save our messages, we are using dynamo db which is a managed NoSQL database 
+## Saving the data to Dynamo DB
+To save our messages, we are using Dynamo DB which is a managed NoSQL database 
 service from AWS -> meaning we are going to store our messages in JSON documents.
 Keep the SDK for [Ruby documentation](https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/DynamoDB/Client.html) open 
 to get help with API call parameter names etc.
@@ -214,6 +214,51 @@ named "A93"
     "Action": "dynamodb:CreateTable",
     "Resource": "arn:aws:dynamodb:us-east-1:979558485280:table/A93"
 }
+```
+
+-  Table - Collection of items
+-  Items - Individual record
+-  Attributes - Properties of the item
+
+Example - A *Student* table can have an item to represent a specific student and it 
+may have attributes e.g. *name*, *student_id* etc. Students are uniquely identifiable 
+using a key called the *Primay key*. The primay key can be a single attribute in which 
+case it is called a *Partition key* or it can be composed of two attributes in which case 
+it is called as a *Composite key*. The primary key of an item must be unique to it. In our 
+example case if we have a table for students of only one class where each student is
+numbered from 1 to n, the primary key can be the student number itself. If there were 
+a situation where more than one student could have the same number (yes, it is not 
+a good example but I am not able to come up with anything good at this moment) then in 
+that case we could use another student attribute e.g. year, class etc. to uniquely 
+identify individual students. In this case the primary key would consist of a 
+partition key and a *sort key*. Primary key is required so that DynamoDB can 
+determine where to store the data in physical storage internal to DynamoDB
+
+Refer to this
+[document](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.CoreComponents.html) 
+to read on the details of the components of DynamoDB
+
+In order to create the table, we need to provide **attribute definitions**, **table name**
+ and a **key schema** (see this document for [request syntax in Ruby](https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/DynamoDB/Client.html#create_table-instance_method)). The key schema refers to the 
+attribute name and the attribute type of the attribute(s) that will serve as the 
+primary key and that is the *only* schema we need to provide because besides 
+the primary key, the table is schemaless - meaning we can have different 
+attributes for different items. Individual attribute definitions are a dictionary consisting 
+of the name and type of the attribute.
+
+In our case JSON documents are items and its first level fields are attributes. 
+We will have a message attribute that holds the message, an email field that may or 
+may not be present. We will add an
+[UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) as an additional attribute to serve as the 
+primary key. 
+
+Note - I am storing the message in the item itself instead of storing it in a file 
+in an S3 bucket and the object URL in the item because AWS allows us to have each 
+item of upto 400KB and our individual messages are limited to 500 characters - so we 
+are well within our limits (even if [UTF-32](https://en.wikipedia.org/wiki/UTF-32) 
+encoding is used that takes 4 bytes per [code point](https://en.wikipedia.org/wiki/Code_point), 
+which we are not using)
+
 ```
 
 ## Receiving notifications on new messages - using SNS notifications
