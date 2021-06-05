@@ -634,7 +634,7 @@ a function.
 using `sudo gem install rubyzip`. Add the following code to the deployment Ruby 
 script (not the lambda function code)
 
-```ruby
+```
 require 'zip'                                                                                         
                                                                                                       
 files_to_zip = ARGV[0..-2]                                                                            
@@ -674,8 +674,8 @@ end
 files = ARGV[0..-2]
 zip_filename = ARGV[-1]
 
-raise NoFilesToZip unless files == nil
-raise NoZipFileName unless zip_filename == nil
+raise NoFilesToZip if files == nil
+raise NoZipFileName if zip_filename == nil
 
 begin
   files_to_zip = []
@@ -718,5 +718,216 @@ throw `NoFilesToZip` error.
 
 Now that we have our zip functionlity, we need to use it to create a deployment package 
 and create a lambda function.
+
+Following AWS' documentation on [deploying a Lambda function with Ruby
+runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-ruby.html), we now 
+need to install any dependencies in a folder structure `vendor/bundle` in the 
+current directory. Right now we don't have any dependencies so we will skip any 
+dependency installation and use only our function file. 
+
+In order to create and deploy a Lambda function, add the following code:
+
+```
+Aws.config.update(
+  region: 'us-east-1',
+  credentials: Aws::InstanceProfileCredentials.new
+)
+
+lambda_client = Aws::Lambda::Client.new
+
+response = lambda_client.create_function({
+  function_name: "a93_message_handler", 
+  runtime: "ruby2.7", 
+  role: "arn:aws:iam::979558485280:role/a93_messaging_lambda_role", 
+  handler: "message_handling_lambda.handler",
+  code: { 
+    zip_file: File.open("#{zip_filename}.zip", "rb"),
+  },
+  description: "Sends SNS notification when a new message ends up in DynamoDB",
+  timeout: 30,
+  memory_size: 128,
+  publish: true,
+  package_type: "Zip"
+})
+```
+
+Here we are setting up the region and the credentials for script wide use with 
+Aws.config.update and then we create a client to the lambda function. We call 
+the `create_function` method to create the function. A few important things to 
+note here are:
+
+1. The role ARN is hardcoded because creating a new role from our script means that 
+we need to provide IAM permissions to our EC2 instance role which is not required here 
+and doesn't seem like a good idea. So, we have a role configured in IAM separately 
+for lambda function. At this point this role has *zero policies* attached to it meaning 
+it has no permissions.
+
+2. In the code section, we need to provide a base64 encoded stream of zip file 
+containing the function code and dependencies. It means we need to open the file to 
+read in binary mode and then provide the file handle to AWS SDK to handle the 
+upload.
+
+3. The handler of a lambda function is of the form `function_file_name.handle_name` 
+and that's what we have added here. We will change it to a variable value in next 
+iterations if required, else we will leave the hardcoded value
+
+If we execute our script now, it will throw us an `AccessDeniedException` as we 
+haven't added the Lambda publish permssion to our EC2 role. Create a new policy with 
+the following statement and attach it to the EC2 role:
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:CreateFunction",
+                "iam:PassRole"
+            ],
+            "Resource": [
+                "arn:aws:lambda:us-east-1:979558485280:function:a93_message_handler",
+                "arn:aws:iam::979558485280:role/a93_messaging_lambda_role"
+            ]
+        }
+    ]
+}
+```
+
+In this policy we are stating that the bearer of this policy is allowed to create a 
+lambda function named a93_message_handler and to pass a role named `a93_messaging_lambda_core`. 
+It is possible to restrict this policy further but we will stop here for now and go 
+deploy our function by calling our script. Our script invocation will look like:
+
+```
+ruby script_name.rb function_file.rb zip_filename
+```
+
+Calling it will create a zip file `zip_filename.zip` with the `function_file.rb` 
+inside it. You can verify that the function has been created by going to the 
+AWS console and navigating to the Lambda service page. 
+
+Now that our function is created, you can invoke it from console by using the 'Test' 
+functionality and you will see the output `Yo` in the execution log on the same 
+page. We can now work on making our lambda function 
+do what we want it to do. But before that we will refactor our deploy script, add 
+error handling, update our EC2 role policy to allow listing of functions and to 
+publish new version of the same lambda function and to invoke the lambda function 
+from our ruby script and update the Lambda execution role to be able to log its 
+output to cloudwatch logs.
+
+To refactor our deploy script, we will start by adding some rescue statements to 
+create function call and our deploy script file becomes:
+
+```
+require 'aws-sdk-lambda'                                                                            
+require './zip_files'                                                                               
+                                                                                                    
+zipper = ZipFilesRec.new(\*ARGV[0..-2], ARGV[-1])                                                     
+zipper.zip                                                                                          
+zip_filename = zipper.zip_filename   
+
+Aws.config.update(                                                                                                  
+  region: 'us-east-1',                                                                              
+  credentials: Aws::InstanceProfileCredentials.new                                                  
+)                                                                                                   
+                                                                                                    
+lambda_client = Aws::Lambda::Client.new                                                             
+                                                                                                    
+begin                                                                                               
+  response = lambda_client.create_function({                                                        
+    function_name: "a93_message_handler",                                                           
+    runtime: "ruby2.7",                                                                             
+    role: "arn:aws:iam::979558485280:role/a93_messaging_lambda_role",                               
+    handler: "message_handling_lambda.handler",                                                     
+    code: {                                                                                         
+      zip_file: File.open(zip_filename, "rb"),                                                 
+    },                                                                                              
+    description: "Sends SNS notification when a new message ends up in DynamoDB",                   
+    timeout: 30,                                                                                    
+    memory_size: 128,                                                                               
+    publish: true,                                                                                  
+    package_type: "Zip"                                                                             
+  })                                                                                                
+rescue Aws::Lambda::Errors::ResourceConflictException => e                                          
+  puts "Error in creating the Lambda function"                                                      
+  puts e.message, e.class                                                                           
+rescue Aws::Lambda::Errors::AccessDeniedException => e                                              
+  puts "Access denied error while creating the Lambda function"                                     
+  puts e.message, e.class                                                                           
+rescue Exception => e                                                                               
+  puts "Error occured while creating the Lambda function"                                           
+  puts e.message, e.class                                                                           
+ensure                                                                                              
+  response                                                                                          
+end     
+```
+
+In the code above you can see that we have moved our zipping code block to a 
+class of its own and we are using that class to zip the files and get the zip_filename 
+as well. Aws.config.update remains the same. In the `create_function` section, 
+We are handling errors using 3 rescue blocks - one for resource conflict (function 
+already exists), another for access denied errors e.g. not allowed to invoke or 
+publish or create or pass role etc. If any unexpected errors occur, we handle it in the 
+third block and re-raise it to halt program execution and inform the user.
+
+Another change is in the `code: {}` section where I have changed the filename in
+ the`File.open` method call to simply the variable name. This change comes as an 
+effect of moving the zipping code to separate class which provides an attribute 
+accessor to access the zip_filename. This filename already comes with ".zip" suffix.
+
+Also, the extracted class looks like:
+
+```
+require 'zip'
+require './generate_file_tree'                                                                      
+                                                                                                    
+class ZipFilesRec                                                                                   
+  attr_reader :zip_filename                                                                         
+                                                                                                    
+  def initialize(\*files, zip_filename)                                                              
+    @files = files                                                                                  
+    @zip_filename = "#{zip_filename}.zip"                                                           
+    @files_to_zip = []                                                                              
+  end                                                                                               
+                                                                                                    
+  def get_files_to_zip                                                                              
+    @files.each do |fn|                                                                             
+      if File.directory?(fn)                                                                        
+        @files_to_zip += GenerateFileTree.new([]).rec_listing(fn)                                   
+      else                                                                                          
+        @files_to_zip << fn                                                                         
+      end                                                                                           
+    end                                                                                             
+  ensure                                                                                            
+    @files_to_zip                                                                                   
+  end                                                                                               
+                                                                                                    
+  def zip                                                                                           
+    get_files_to_zip.each do |fn|                                                                   
+      puts "Compressing #{fn}..."                                                                   
+      Zip::File.open("#{@zip_filename}.zip", Zip::File::CREATE) do |zfh|                            
+        zfh.get_output_stream("#{fn}") do |fh|                                                      
+          fh.write(File.open("#{fn}").read)                                                         
+        end                                                                                         
+      end                                                                                           
+    end                                                                                             
+  rescue Exception => e                                                                             
+    puts "Error in compressing file"                                                                
+    raise                                                                                           
+  end                                                                                               
+                                                                                                    
+  private :get_files_to_zip                                                                         
+end     
+``` 
+
+Here we initialize the class with a set of files/folders to compress and a name 
+for the zip file. Then we have a private method get_files_to_zip which creates an 
+array of filenames with their paths to be zipped. We also have a zip method where 
+we iterate through the list of files and keep adding it to our archive file. 
+
+The `private` keyword at the bottom is used to signify that the following method names 
+are private.
 
 
