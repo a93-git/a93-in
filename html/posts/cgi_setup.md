@@ -103,7 +103,7 @@ about using this form is that we don't have to close the file explicitly and it 
 automatically closed.
 
 In the next two statements we are returning an HTTP response by printing it to the 
-STDOUT. This response will be sent back to the browser and rendered as 'Hello, World`
+STDOUT. This response will be sent back to the browser and rendered as 'Hello, World'
 
 ## Sending a "Hello, World!" message
 
@@ -155,7 +155,10 @@ to get help with API call parameter names etc.
 
 We will start by adding a barebones policy with permission to list the tables 
 to the instance profile attached to our machine and then keep on adding 
-permissions as required.
+permissions as required. So, the credentials will come from the attached instance 
+profile, no need to create any access keys.
+
+
 
 ```
 {
@@ -259,6 +262,352 @@ are well within our limits (even if [UTF-32](https://en.wikipedia.org/wiki/UTF-3
 encoding is used that takes 4 bytes per [code point](https://en.wikipedia.org/wiki/Code_point), 
 which we are not using)
 
+Add the code below to the script and it will create a new table with name "A93" 
+when executed:
+
+```
+response = dynamo_client.create_table({
+  attribute_definitions: [                                                                            
+    {                                                                                                 
+      attribute_name: "id",                                                                           
+      attribute_type: "S"                                                                             
+    }                                                                                                 
+  ],                                                                                                  
+  table_name: "A93",                                                                                  
+  key_schema: [                                                                                       
+    {                                                                                                 
+      attribute_name: "id",                                                                           
+      key_type: "HASH"                                                                                
+    }                                                                                                 
+  ],                                                                                                  
+  billing_mode: "PROVISIONED",                                                                        
+  provisioned_throughput: {                                                                           
+    read_capacity_units: 5,                                                                           
+    write_capacity_units: 5                                                                           
+  }                                                                                                   
+})                                                                                                    
 ```
 
-## Receiving notifications on new messages - using SNS notifications
+In the above call to the `create_table` api I have set the billing mode to 
+provisioned and set the read and write capacity units. I don't expect a heavy 
+traffic to the blog and neither am I reading my messages a gazillion times a day 
+so the provisioned read and write capacity units should suffice. You can read more 
+about [read and write capacity
+units here](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadWriteCapacityMode.html#HowItWorks.ProvisionedThroughput.Manual) 
+
+Running the scipt at this point should create a new table called "A93". Now we will 
+add a single item to this table. In order to be able to put item, we need to add 
+the required permission to the instance role. Add the following statement to the role:
+
+```
+{
+    "Sid": "VisualEditor0",
+    "Effect": "Allow",
+    "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:PutItem"
+    ],
+    "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/A93"
+}
+```
+
+Once done, we can update our code to write items to the DynamoDB. But before adding 
+code to do that, we wrap our create_table API call in a `begin/rescue` block to catch 
+any errors that might occur. Our create_table API call should look like:
+
+```
+begin                                                                                                 
+  response = dynamo_client.create_table({                                                             
+    attribute_definitions: [                                                                          
+      {                                                                                               
+        attribute_name: "id",                                                                         
+        attribute_type: "S"                                                                           
+      }                                                                                               
+    ],                                                                                                
+    table_name: "A93",                                                                                
+    key_schema: [                                                                                     
+      {                                                                                               
+        attribute_name: "id",                                                                         
+        key_type: "HASH"                                                                              
+      }                                                                                               
+    ],                                                                                                
+    billing_mode: "PROVISIONED",                                                                      
+    provisioned_throughput: {                                                                         
+      read_capacity_units: 5,                                                                         
+      write_capacity_units: 5                                                                         
+    }                                                                                               
+  })                                                                                                
+rescue Aws::DynamoDB::Errors::ResourceInUseException => e                                           
+  puts "Table already exists"                                                                       
+  puts e.message, e.class                                                                           
+  exit                                                                                              
+rescue Exception => e                                                                               
+  puts "Error occurred while creating table"                                                        
+  puts e.message, e.class                                                                           
+  raise 
+end
+
+puts response unless response == nil
+```
+
+Here we make the api call in the begin block and catch any errors in the rescue block. 
+We can also catch specific errors for example if the table already exists then we get 
+a resource already exists exception and when that error occurs we rescue it and print 
+out the error message and then exit the program execution. If some other error occurs
+ which we are not expecting, we are also catching that in the last rescue block 
+and after logging the error, we are re-raising it. In the end we print the response 
+if it is not nil
+
+With the create table call fixed, let's add the call to insert the item into the table. 
+Add the following code to the script after the create table call:
+
+```
+begin                                                                                                 
+response = dynamo_client.put_item({                                                                   
+  table_name: "A93",                                                                                  
+  item: {                                                                                             
+    "id": "some-string",                                                                              
+    "message": "this is super cool",                                                                  
+    "email": "super@duper.com"
+  }                                                                                                   
+})                                                                                                    
+rescue Aws::DynamoDB::Errors::AccessDeniedException => e                                              
+  puts e.message, e.class                                                                             
+rescue Exception => e
+  puts "Error occurred while inserting item to the table"
+  puts e.message, e.class
+  raise
+end                                                                                                   
+                                                                                                      
+puts response unless response == nil 
+```
+
+To *insert* an item in the table, we are using the `put_item` API call which takes 
+the `table_name`, `item` document as parameters. Once executed, we will have our 
+item created in the table. Check this link for a [full list of parameters](https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/DynamoDB/Client.html#put_item-instance_method) that this method accepts.
+
+We will comeback to this code block later on to add conditions which will only write 
+to the table if the id doesn't already exists. In othre words, it won't overwrite my 
+messages.
+
+For now, our script is able to create a table and write to the table. Let's add 
+functionality to fetch our messages as well. But before we fetch our messages, 
+we need to add permission to our instance role to be able to read the items in the table.
+ Update our policy statement to include the `dynamodb:GetItem` permission from the 
+A93 table
+
+```
+{
+    "Sid": "VisualEditor0",
+    "Effect": "Allow",
+    "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:PutItem",
+        "dynamodb:GetItem"
+    ],
+    "Resource": "arn:aws:dynamodb:us-east-1:979558485280:table/A93"
+}
+```
+
+Once done updating the policy, let's update our script to perform the read operation. 
+Append the following code to our script to read from the table:
+
+```
+begin 
+  response = dynamo_client.get_item({                                                                 
+    table_name: "A93",                                                                                
+    key: {                                                                                            
+      "id" => "some-string",                                                                          
+    },                                                                                                
+  })                                                                                                  
+rescue Aws::DynamoDB::Errors::AccessDeniedException => e                                              
+  puts "Insufficient permissions to read from the table"                                              
+  puts e.message, e.class                                                                             
+rescue Exception => e                                                                                 
+  raise                                                                                               
+end 
+```
+
+Here we are trying to read an item from the table with the given id. We are 
+rescuing AccessDeniedException in case there are some issues due to an update in 
+policy or some other reason. The details for all the possible parameters can be 
+read from [this document](https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/DynamoDB/Client.html#get_item-instance_method).
+
+Now we can create tables, write to that table and read from that table. In my particular 
+case I am not looking forward to deleting the messages I receive (even mean ones). So, 
+I will not be adding the delete functionlity to our script, though, adding it should 
+be a trivial task. Similarly, we are not going to update any messages so, no need to 
+implement this functionality as well. However, we can if we want to.
+
+Now we will put our individual API calls into methods and bundle these methods in 
+a class that can be `require`d in our cgi program. Before doing that, let's modify 
+the `put_item` api call to only write if the id doesn't exist. After adding the 
+conditional check our code should look like this:
+
+```
+begin                                                                                                 
+  response = dynamo_client.put_item({                                                                 
+    table_name: "A93",                                                                                
+    item: {                                                                                           
+      "id": "some-string",                                                                            
+      "message": "this is super cool",                                                                
+      "email": "super@duper.com"                                                                      
+    },                                                                                                
+    condition_expression: "attribute_not_exists(id)"                                                  
+  })                                                                                                  
+rescue Aws::DynamoDB::Errors::AccessDeniedException => e                                              
+  puts "Insufficient permissions to write to the table"                                               
+  puts e.message, e.class                                                                             
+  raise                                                                                               
+rescue Aws::DynamoDB::Errors::ConditionalCheckFailedException => e                                    
+  puts "Attribute with the given Id already exists"                                                   
+  puts e.message, e.class                                                                             
+  raise                                                                                               
+rescue Exception => e                                                                                 
+  puts "Error occurred while inserting item in the table"                                             
+  puts e.message, e.class                                                                             
+  raise                                                                                               
+end  
+```
+
+We have added a condition expression that states that we are only going to insert 
+if no items with the given `id` exist. We are using the conditional check on the 
+`id` attribute because it is our primary key and guaranteed to be present in any 
+item. If any item with the given attribute exists, a `ConditionalCheckFailedException` will 
+be raised. We are rescuing this error and after logging the error details (just a put 
+statement for now) we re-raise it to be handled by the caller.
+
+After performing our refactoring, the overall class to handle communication with the 
+DynamoDB will look like this:
+
+```
+#This class handles communication with AWS DynamoDB for my personal website. It
+#provides functionality to create a table, write to and read from the table (no
+#update or delete methods are there). The credentials are retrieved from th
+#EC2 instance role.
+                                                                                                   
+#Usage:                                                                                            
+#handler = DynamoHandler.new(region_code, table_name)                                                          
+#handler.create_table 
+#handler.put_item(json_document)                                                       
+#handler.read_item(id)                                                                 
+                                                                                                    
+require 'aws-sdk-core'                                                                              
+require 'aws-sdk-dynamodb'                                                                          
+                                                                                                    
+class DynamoHandler                                                                                 
+  attr_reader :table_name
+
+  def initialize(region_code, table_name)
+    Aws.config.update(                                                                              
+      region: region_code,                                                                          
+      credentials: Aws::InstanceProfileCredentials.new                                              
+    )                                                                                               
+    @dynamo_client = Aws::DynamoDB::Client.new                                                      
+    @table_name = table_name
+  end                                                                                               
+                                                                                                    
+  def create_table()                                                                      
+    response = @dynamo_client.create_table({                                                        
+      attribute_definitions: [                                                                      
+        {                                                                                           
+          attribute_name: "id",                                                                     
+          attribute_type: "S"                                                                       
+        }                                                                                           
+      ],                                                                                            
+      table_name: @table_name,                                                                       
+      key_schema: [                                                                                 
+        {                                                                                           
+          attribute_name: "id",                                                                     
+          key_type: "HASH"                                                                          
+        }                                                                                           
+      ],                                                                                            
+      billing_mode: "PROVISIONED",                                                                  
+      provisioned_throughput: {                                                                     
+        read_capacity_units: 5,                                                                     
+        write_capacity_units: 5                                                                     
+      }                                                                                             
+    })                                                                                              
+  rescue Aws::DynamoDB::Errors::ResourceInUseException => e
+    puts "Table already exists"                                                                     
+    puts e.message, e.class                                                                         
+    raise                                                                                           
+  rescue Exception => e                                                                             
+    puts "Error occurred while creating table"                                                      
+    puts e.message, e.class                                                                         
+    raise                                                                                           
+  ensure                                                                                            
+    response                                                                                        
+  end                                                                                               
+                                                                                                    
+  def put_item(json_document)                                                           
+    response = @dynamo_client.put_item({                                                            
+      table_name: @table_name,                                                                       
+      item: json_document,                                                                          
+      condition_expression: "attribute_not_exists(id)"                                              
+    })                                                                                              
+  rescue Aws::DynamoDB::Errors::AccessDeniedException => e        
+    puts "Insufficient permissions to write to the table"                                              
+    puts e.message, e.class                                                                            
+    raise                                                                                              
+  rescue Aws::DynamoDB::Errors::ConditionalCheckFailedException => e                                   
+    puts "Attribute with the given Id already exists"                                                  
+    puts e.message, e.class                                                                            
+    raise                                                                                              
+  rescue Exception => e                                                                                
+    puts "Error occurred while inserting item in the table"                                            
+    puts e.message, e.class                                                                            
+    raise                                                                                              
+  ensure                                                                                               
+    response                                                                                           
+  end                                                                                                  
+                                                                                                       
+  def read_item(id)                                                                        
+    response = @dynamo_client.get_item({                                                               
+      table_name: @table_name,                                                                          
+      key: {                                                                                           
+        "id" => id,                                                                                    
+      },                                                                                               
+    })                                                                                                 
+  rescue Aws::DynamoDB::Errors::AccessDeniedException => e                                             
+    puts "Insufficient permissions to read from the table"                                             
+    puts e.message, e.class                                                                            
+    raise                                                                                              
+  rescue Exception => e                                                                                
+    puts "Error occurred while reading item from the table"                                            
+    puts e.message, e.class                                                                            
+    raise                                                                                              
+  ensure
+    response
+  end                                                                                                  
+end   
+```
+
+In the code above, I have added some comments at the top with the a usage example. 
+After that I have moved everything inside the class `DynamoHandler`. There is the 
+constructor - `initialize` method which takes in a region and a table name - whether 
+existing or the name of a new table; and uses the instance's 
+IAM profile to gather credentials and creates a client - an interface - to the 
+DynamoDB service. Once the object has been successfully initialized, it can be used 
+to create a new table using the `create_table`. This whole setup is for use 
+with a very specific usecase and that's why 
+instead of generalizing it I have hardcoded the attribute named `id` of type string.
+Once we have the table created, we can use the `put_item` or `read_item` methods to 
+insert or read from the table by providing a document to insert or an ID to read. 
+I have also added ensure statement to make sure that a response is always returned 
+even if error occurs (although that doesn't make much sense with our current setup 
+as we are re-raising the error and it will cause error at the caller's end as well... 
+I will probably remove those raise statements in next iteration)
+
+For now our DynamoHandler class is ready to be used. As a next logical step we 
+need to be notified when a new message arrives. We will be using DynamoDB streams 
+to trigger a Lambda function whenever a new message comes in and the Lambda function 
+will send us an SNS notification via email. [DyanmoDB
+streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/streamsmain.html)
+ offer [2.5 million requests for free per month](https://aws.amazon.com/dynamodb/pricing/provisioned/) 
+and that should be enough for my use case :) 
+
+## Receiving notifications on new messages
+
+
+
