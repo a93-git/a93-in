@@ -4,6 +4,43 @@ html * {
   color: white;
 }
 
+body {
+  padding: 2vh;
+}
+
+p {
+  width: 900px;
+  align: center;
+}
+
+li a {
+  border: solid;
+  border-color: indianred;
+  border-width: thin;
+}
+
+li {
+  list-style-type: none;
+  padding: 20px;
+}
+p a {
+  border: solid;
+  border-color: indianred;
+  border-width: thin;
+}
+
+pre {
+  width: 900px;
+  border: solid;
+  border-color: grey;
+  border-width: thin;
+}
+
+code {
+  font-family: "IBM Plex Mono", monospace; 
+  font-size: 1em;
+}
+
 #outermost-div {
   padding: 40px;
 }
@@ -40,4 +77,8 @@ a:hover {
 
 .navbar-a {
 	display: block;
+}
+
+.selected {
+  color: gray;
 }
