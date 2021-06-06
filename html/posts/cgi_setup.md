@@ -930,6 +930,68 @@ we iterate through the list of files and keep adding it to our archive file.
 The `private` keyword at the bottom is used to signify that the following method names 
 are private.
 
+We will also refactor our `deploy_lambda` script and put it into a class (not required 
+but just to bundle things up) and the code will become:
+
+```
+require 'aws-sdk-lambda'
+require './zip_files'
+
+class LambdaHandler
+  def initialize(zip_filename="", *files_to_zip)
+    @files_to_zip = files_to_zip
+    @zip_filename = zip_filename
+    Aws.config.update(
+      region: 'us-east-1',
+      credentials: Aws::InstanceProfileCredentials.new
+    )
+    @lambda_client = Aws::Lambda::Client.new
+  end
+
+  def deploy_lambda
+    zipper = ZipFilesRec.new(files_to_zip, zip_filename)
+    zipper.zip
+    zip_filename = zipper.zip_filename
+
+    response = @lambda_client.create_function({
+      function_name: "a93_message_handler", 
+      runtime: "ruby2.7", 
+      role: "arn:aws:iam::979558485280:role/a93_messaging_lambda_role", 
+      handler: "message_handling_lambda.handler",
+      code: { 
+        zip_file: File.open("#{zip_filename}", "rb"),
+      },
+      description: "Sends SNS notification when a new message ends up in DynamoDB",
+      timeout: 30,
+      memory_size: 128,
+      publish: true,
+      package_type: "Zip"
+    })
+  rescue Aws::Lambda::Errors::ResourceConflictException => e
+    puts "Error in creating the Lambda function"
+    puts e.message, e.class
+  rescue Aws::Lambda::Errors::AccessDeniedException => e
+    puts "Access denied error while creating the Lambda function"
+    puts e.message, e.class
+  rescue Exception => e
+    puts "Error occured while creating the Lambda function"
+    puts e.message, e.class
+  ensure 
+    response
+  end
+end
+
+```
+
+Here we have stuffed everything in a class, wrapped our API calls and their 
+rescue blocks into method definitions and put the client configuration in the 
+initialize block. Also, the zip_filename and the \*files_to_zip arguments are 
+not required anymore (don't need to specify on the command line, don't need to 
+provide while creating an object from this class). If and when we want to create 
+a function, we will create an object with those parameters and use the methods 
+that use these parameters i.e. the deploy_lambda function for now. Region value 
+is hardcoded to 'us-east-' because we are going to be working only in this region.
+
 Now that we are done with the refactoring for now, let's see what changes we need 
 to make to the EC2 role and the lambda execution role. To allow the bearer of the 
 instance role to be able to publish a version, list and invoke the lambda function, 
@@ -993,8 +1055,57 @@ handled by AWS (we can also do that, be we won't), we can trust it to not put
 spammy logs :)
 
 With that we have the required policies in place, our script is working as expected 
-and we have tested our function by invoking it from the console. Let's add the 
+and we have tested our function by invoking it from the AWS GUI console. Let's add the 
 functionality to list the functions in our account and then to invoke our 
-function from our ruby script
+function from our ruby script. Add the following methods to the class definition:
+
+```
+def invoke(function_name)
+  response = @lambda_client.invoke({
+    function_name: function_name, 
+    invocation_type: "RequestResponse", 
+    log_type: "Tail", 
+    payload: "",
+  })
+  response
+end
+
+def list_functions
+  @lambda_client.list_functions
+end
+```
+
+The invoke function sends a function name to invoke with invocation type set to
+ "RequestResponse" which means we will wait for the execution to finish and the 
+`log_type` parameter is set to `Tail` meaning we will get the 'tail' of the log 
+which will be the last 4 KB of the execution logs (in Base64 encoded format). Payload is empty.
+
+The list_functions method is just a wrapper around the API call.
+
+To invoke these functions and to print the response, add the following code to the 
+deployment script file (outside the class definition):
+
+```
+lh = LambdaHandler.new
+
+invoke_response = lh.invoke("a93_message_handler")
+puts Base64.decode64(invoke_response[:log_result])
+
+puts 
+
+list_response = lh.list_functions
+list_response[:functions].each do |fun|
+  print "#{fun[:function_name]}\t#{fun[:function_arn]}\n"
+end
+```
+
+Here we are creating a LambdaHandler object and then invoking it. Since the log 
+output is in base64 encoded format, we decode it with `Base64.decode` before 
+printing. Also, we list the functions and print the function name and arn for 
+each of the function in our account in the 'us-east-1' region
+
+This marks the end of the deployment pipeline setup. Now we have everything we need 
+to deploy our functions. I am going to be working on building our actual lambda function 
+now. 
 
 
