@@ -1,26 +1,23 @@
 require 'net/scp'
 require 'json'
 
-BASE_DIR = $0.split("/")[0..-2].join("/")
-load "#{BASE_DIR}/parse_markdown.rb"
-load "#{BASE_DIR}/generate_file_tree.rb"
-
 # Read the configuration JSON file
-fh = File.open(".scpconfig.json")
-config_json = JSON.parse(fh.read)
-scp_paths = config_json["scp"]
+config_json = ""
+File.open(".scpconfig.json") do |fh|
+  config_json = JSON.parse(fh.read)
+end
+
+scp_paths = config_json["upload"]
 scp_exclude_paths = config_json["exclude"]
 markdown_paths = config_json["markdown_paths"]
 webserver_path = config_json["webserver"]
-fh.close
+local_root = config_json["development"]["local_root"]
 
-# Generate the templates into HTML files
-puts "Generating the static files from templates..."
-`ruby scripts/ruby/generate_post_link.rb html/projects/ templates/projects.html.erb projects.html`
-`ruby scripts/ruby/generate_post_link.rb html/posts/ templates/index.html.erb index.html`
-puts "Static file generation complete..."
-
+load "#{local_root}/scripts/ruby/parse_markdown.rb"
+load "#{local_root}/scripts/ruby/generate_file_tree.rb"
 puts ""
+require "#{local_root}/scripts/ruby/renderer"
+
 
 # Get paths to all the markdown files
 generator_markdown = GenerateFileTree.new([".md$"])
@@ -57,6 +54,34 @@ end
 
 puts "Done generating HTML from markdown files...", ""
 
+# Generating UI pages
+puts "Rendering index page"
+index_obj = RenderIndexPage.new
+File.open("#{local_root}/index.html", "w") do |fp|
+  fp.write(index_obj.render)
+end
+
+puts "Rendering projects page"
+projects_obj = RenderProjectsPage.new
+File.open("#{local_root}/projects.html", "w") do |fp|
+  fp.write(projects_obj.render)
+end
+
+puts "Rendering contact page"
+contact_obj = RenderContactPage.new
+File.open("#{local_root}/contact.html", "w") do |fp|
+  fp.write(contact_obj.render)
+end
+
+puts "Rendering posts pages"
+GenerateFileTree.new([".md$"]).rec_listing("#{local_root}/html/posts").each do |fp|
+  obj = RenderPostsPage.new(fp).render
+  # file_path = fp.split("/")[-1] 
+  File.open(fp, "w") do |fh|
+    fh.write(obj)
+  end
+end
+
 generator = GenerateFileTree.new(scp_exclude_paths)
 
 # For each path and destination line in the configfile
@@ -72,6 +97,7 @@ scp_paths.each do |path|
 end
 
 files_to_scp = generator.file_list
+puts files_to_scp
 
 count = 0
 while count < files_to_scp.count
@@ -106,7 +132,7 @@ Net::SSH.start("a93", "abhishek") do |ssh|
   end
 
   puts "Changing the ownership of files"
-  output = ssh.exec!("sudo chown -R $USER:$USER #{webserver_path}; ls -laR #{webserver_path}")
+  # output = ssh.exec!("sudo chown -R $USER:$USER #{webserver_path}; ls -laR #{webserver_path}")
   puts output, "Done", ""
 end
 puts "Done checking for remote folders", ""
