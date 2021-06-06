@@ -907,7 +907,7 @@ class ZipFilesRec
   def zip                                                                                           
     get_files_to_zip.each do |fn|                                                                   
       puts "Compressing #{fn}..."                                                                   
-      Zip::File.open("#{@zip_filename}.zip", Zip::File::CREATE) do |zfh|                            
+      Zip::File.open("#{@zip_filename}", Zip::File::CREATE) do |zfh|                            
         zfh.get_output_stream("#{fn}") do |fh|                                                      
           fh.write(File.open("#{fn}").read)                                                         
         end                                                                                         
@@ -938,7 +938,7 @@ require 'aws-sdk-lambda'
 require './zip_files'
 
 class LambdaHandler
-  def initialize(zip_filename="", *files_to_zip)
+  def initialize(zip_filename="", \*files_to_zip)
     @files_to_zip = files_to_zip
     @zip_filename = zip_filename
     Aws.config.update(
@@ -949,7 +949,7 @@ class LambdaHandler
   end
 
   def deploy_lambda
-    zipper = ZipFilesRec.new(files_to_zip, zip_filename)
+    zipper = ZipFilesRec.new(*files_to_zip, zip_filename)
     zipper.zip
     zip_filename = zipper.zip_filename
 
