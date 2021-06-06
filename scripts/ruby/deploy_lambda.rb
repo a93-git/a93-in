@@ -14,18 +14,21 @@ class LambdaHandler
     @lambda_client = Aws::Lambda::Client.new
   end
 
-  def deploy_lambda
-    zipper = ZipFilesRec.new(files_to_zip, zip_filename)
+  def zip_files
+    zipper = ZipFilesRec.new(*@files_to_zip, @zip_filename)
     zipper.zip
-    zip_filename = zipper.zip_filename
+    @zip_filename = zipper.zip_filename
+  end
 
+  def deploy_lambda
+    zip_files
     response = @lambda_client.create_function({
       function_name: "a93_message_handler", 
       runtime: "ruby2.7", 
       role: "arn:aws:iam::979558485280:role/a93_messaging_lambda_role", 
       handler: "message_handling_lambda.handler",
       code: { 
-        zip_file: File.open("#{zip_filename}", "rb"),
+        zip_file: File.open("#{@zip_filename}", "rb"),
       },
       description: "Sends SNS notification when a new message ends up in DynamoDB",
       timeout: 30,
@@ -46,6 +49,14 @@ class LambdaHandler
     response
   end
 
+  def update_function_code
+    zip_files
+    resp = @lambda_client.update_function_code({
+      function_name: "a93_message_handler", 
+      zip_file: File.open("#{@zip_filename}", "rb"),
+    })
+  end
+
   def invoke(function_name)
     response = @lambda_client.invoke({
       function_name: function_name, 
@@ -60,16 +71,18 @@ class LambdaHandler
     response = @lambda_client.list_functions
   end
 
+  private :zip_files
 end
 
-lh = LambdaHandler.new
+lh = LambdaHandler.new("message_handler", "message_handling_lambda.rb")
+
+puts lh.update_function_code
 
 invoke_response = lh.invoke("a93_message_handler")
 puts "Tail log of Lambda invocation:"
 puts Base64.decode64(invoke_response[:log_result])
 
 puts 
-
 
 list_response = lh.list_functions
 list_response[:functions].each do |fun|
