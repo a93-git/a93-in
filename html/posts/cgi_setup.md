@@ -611,8 +611,8 @@ and that should be enough for my use case :)
 
 In order to be able to trigger a lambda function, we need to have a function in the 
 first place. We will start with creating a function on the local system and then 
-deploying it using AWS CLI (which will use the IAM role attached the EC2 instance 
-for credentials). We will use AWS CLI to test this function and after that we will 
+deploying it using a helper Ruby script (which will use the IAM role attached the EC2 instance 
+for credentials). We will use the same helper script to test this function and after that we will 
 set up the dynamo DB triggers
 
 Let's start with a barebones lambda function by creating a file named lambda_handler.rb
@@ -1121,8 +1121,187 @@ output is in base64 encoded format, we decode it with `Base64.decode` before
 printing. Also, we list the functions and print the function name and arn for 
 each of the function in our account in the 'us-east-1' region
 
+We, now, need to add a trigger to the Lambda function so that it will get invoked 
+whenever an item in the table is modified. 
+
 This marks the end of the deployment pipeline setup. Now we have everything we need 
 to deploy our functions. I am going to be working on building our actual lambda function 
 now. 
+
+The Lambda code is very simple: create a client, parse the event data in a string 
+and then publish the message to an SNS topic. The code looks like this (with error handling):
+
+```
+require 'aws-sdk-sns'
+
+def handler(event:, context:)
+  Aws.config.update({
+    "region": "us-east-1"
+  })
+
+  sns_client = Aws::SNS::Client.new 
+  messages = []
+
+  begin
+    event["Records"]&.each do |record|
+      messages.append({
+        "email" => record["dynamodb"]["NewImage"]["email"]&.values,
+        "message" => record["dynamodb"]["NewImage"]["message"]&.values,
+        "id" => record["dynamodb"]["NewImage"]["id"]&.values
+      })
+    end
+  rescue Exception => e
+    puts "Error in parsing the event data"
+    puts e.message, e.class
+  end
+
+  begin
+    response = sns_client.publish({
+      topic_arn: "arn:aws:sns:us-east-1:979558485280:a93-topic",
+      message: messages.to_s, 
+      subject: "You have a new message on #{Time.now.strftime("%Y-%m-%d")}"
+    })
+  rescue Exception => e
+    puts "Error in parsing the event data"
+    puts e.message, e.class
+  end
+
+  response.message_id
+end
+```
+
+We start with `require`-ing the `aws-sdk-sns` gem and then configure the region 
+for the client and create an SNS client. We parse through the structure of the 
+event to capture the required fields. We are also rescuing any exceptions but 
+we don't re-raise it; instead we simply log it. If there is any error in parsing of 
+the event data it is due to one reason- the structure of the event 
+data has changed and retries won't fix this, so we won't raise this error.
+
+After that we attempt to publish the message. The topic ARN is hard-coded in the 
+function because we are going to only use this topic. The subject line consists of 
+a fixed string, appended with the current data - this will make all the messages 
+from the same data end up as a single thread in my mailbox. We rescue any exceptions 
+and the probable causes are: permission issue which can't be fixed by retrying and 
+network issue which is highly unlikely. That is the reason why I haven't configured 
+any dead letter queues or some other similar mechanism.  
+
+In order for this function to be triggered by the DynamoDB stream, we need to first 
+have a stream and then we need to add permissions to Lambda's execution role to 
+be able to fetch those event data. We will [enable DynamoDB
+streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html#Streams.Enabling)
+ from the AWS GUI console (since this is a onetime operation for our table). Note that 
+I have setup the stream so that only the 'New image' will be written to it because 
+our messages are never going to be modified, thus, we don't need to know what the old
+ value was - because there isn't any. Once the stream is enabled, create a new 
+policy for lambda execution role and add the following statement:
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:GetShardIterator",
+                "dynamodb:DescribeStream",
+                "dynamodb:GetRecords"
+            ],
+            "Resource":
+"arn:aws:dynamodb:us-east-1:979558485280:table/A93/stream/2021-06-06T05:26:27.307"
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": "dynamodb:ListStreams",
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+This policy will allow the function to be able to describe, retrieve records from and 
+get shard iterator from the given stream. Also, it will allow it to be able to list 
+the streams.
+
+We also need to be able to send SNS notifications. For that create another policy and 
+attach it to the Lambda execution role with the following statement:
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": "sns:Publish",
+            "Resource": "arn:aws:sns:us-east-1:979558485280:a93-topic"
+        }
+    ]
+}
+```
+
+This policy will allow the Lambda function to publish messages to the provided SNS 
+topic.
+
+I have went ahead and moved the drive code - the code that initiated the function 
+udpate or invoked the function or put a new item in the table in a file of its own
+and called it `driver.rb`. Here is the code for driver.rb (note that whichever 
+functionality is required, simply uncomment that section):
+
+```
+require './dynamohandler'
+require './deploy_lambda'
+
+#-----------------
+# Add trigger to the function - only for newly created functions
+#-----------------
+# lambda_obj = LambdaHandler.new
+# lambda_obj.create_trigger
+
+#-----------------
+# Add new object to the table
+#-----------------
+obj = DynamoHandler.new('us-east-1', 'A93')
+# 
+response = obj.put_item({"message": "This is the third message to trigger the Lambda function using
+DynamoDB streams.", "id": "dynamo-3"})
+# 
+ puts response
+ 
+#-----------------
+# Update lambda function code
+#-----------------
+# lh = LambdaHandler.new("message_handler", "message_handling_lambda.rb")
+# 
+# puts lh.update_function_code
+
+#-----------------
+# Invoke lambda function 
+#-----------------
+ # invoke_response = lh.invoke("a93_message_handler")
+ # puts "Tail log of Lambda invocation:"
+ # puts Base64.decode64(invoke_response[:log_result])
+
+#-----------------
+# List functions
+#-----------------
+# list_response = lh.list_functions
+# list_response[:functions].each do |fun|
+  # print "#{fun[:function_name]}\t#{fun[:function_arn]}\n"
+# end
+``` 
+
+Now we have our Lambda function setup, our DynamoDB is configured with a table with 
+its schema in place. We have also enabled the streams and are able to parse the stream 
+data and send SNS notifications accordingly. If you don't already have an SNS 
+topic configured [go through this AWS doc](https://docs.aws.amazon.com/sns/latest/dg/sns-create-topic.html) 
+to create one. 
+
+This marks the end of our setup on AWS end. We now need to dump the messages that 
+we receive to the DynamoDB table and that needs to be done in the CG script. So let's go 
+back to cg-bin folder in our webserver's document root.
+
+## Modifying the CGI script to dump messages to DynamoDB
 
 
