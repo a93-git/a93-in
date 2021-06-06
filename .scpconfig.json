@@ -23,7 +23,11 @@
   "markdown_include": [
     ".md$"],
 
-    "download": {
+    "download": [
       "messages"
+    ],
+
+    "development": {
+      "local_root": "/home/abhishek/a93-in"
     }
 }
