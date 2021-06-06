@@ -76,30 +76,3 @@ class RenderPostsPage
 end
 
 
-puts "Rendering index page"
-index_obj = RenderIndexPage.new
-File.open("index.html", "w") do |fp|
-  fp.write(index_obj.render)
-end
-
-puts "Rendering projects page"
-projects_obj = RenderProjectsPage.new
-File.open("#{local_root}/projects.html", "w") do |fp|
-  fp.write(projects_obj.render)
-end
-
-puts "Rendering contact page"
-contact_obj = RenderContactPage.new
-File.open("#{local_root}/contact.html", "w") do |fp|
-  fp.write(contact_obj.render)
-end
-
-puts "Rendering posts pages"
-GenerateFileTree.new([".md$"]).rec_listing("html/posts").each do |fp|
-  obj = RenderPostsPage.new(fp).render
-  file_path = fp.split("/")[-1] 
-  File.open(fp, "w") do |fh|
-    fh.write(obj)
-  end
-end
-
