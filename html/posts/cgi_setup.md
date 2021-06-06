@@ -945,21 +945,25 @@ class LambdaHandler
       region: 'us-east-1',
       credentials: Aws::InstanceProfileCredentials.new
     )
+
     @lambda_client = Aws::Lambda::Client.new
   end
 
-  def deploy_lambda
-    zipper = ZipFilesRec.new(*files_to_zip, zip_filename)
+  def zip_files
+    zipper = ZipFilesRec.new(*@files_to_zip, @zip_filename)
     zipper.zip
-    zip_filename = zipper.zip_filename
+    @zip_filename = zipper.zip_filename
+  end
 
+  def deploy_lambda
+    zip_files
     response = @lambda_client.create_function({
       function_name: "a93_message_handler", 
       runtime: "ruby2.7", 
       role: "arn:aws:iam::979558485280:role/a93_messaging_lambda_role", 
       handler: "message_handling_lambda.handler",
       code: { 
-        zip_file: File.open("#{zip_filename}", "rb"),
+        zip_file: File.open("#{@zip_filename}", "rb"),
       },
       description: "Sends SNS notification when a new message ends up in DynamoDB",
       timeout: 30,
@@ -979,6 +983,8 @@ class LambdaHandler
   ensure 
     response
   end
+
+  private :zip_files
 end
 
 ```
@@ -990,11 +996,12 @@ not required anymore (don't need to specify on the command line, don't need to
 provide while creating an object from this class). If and when we want to create 
 a function, we will create an object with those parameters and use the methods 
 that use these parameters i.e. the deploy_lambda function for now. Region value 
-is hardcoded to 'us-east-' because we are going to be working only in this region.
+is hardcoded to 'us-east-' because we are going to be working only in this region. 
+We have also added a private zip_files method that zips the files.
 
 Now that we are done with the refactoring for now, let's see what changes we need 
 to make to the EC2 role and the lambda execution role. To allow the bearer of the 
-instance role to be able to publish a version, list and invoke the lambda function, 
+instance role to be able to update the function code, list and invoke the lambda function, 
 update the lambda policy attached to the EC2 role with the following statement:
 
 {
@@ -1007,7 +1014,7 @@ update the lambda policy attached to the EC2 role with the following statement:
                 "lambda:CreateFunction",
                 "iam:PassRole",
                 "lambda:InvokeFunction",
-                "lambda:PublishVersion"
+                "lambda:UpdateFunctionCode",
             ],
             "Resource": [
                 "arn:aws:lambda:us-east-1:979558485280:function:a93_message_handler",
@@ -1024,7 +1031,7 @@ update the lambda policy attached to the EC2 role with the following statement:
 }
 
 This policy has permissions to invoke and publish only our message handler function 
-and to list functions in our account.
+and to list functions in our account and to update the code of the function.
 
 In order to allow our Lambda function to create a log group, and then a log stream 
 and then allow it to put log events into it, we will attach an AWS managed policy
@@ -1056,10 +1063,18 @@ spammy logs :)
 
 With that we have the required policies in place, our script is working as expected 
 and we have tested our function by invoking it from the AWS GUI console. Let's add the 
-functionality to list the functions in our account and then to invoke our 
+functionality to list the functions in our account and then to invoke and update the code for our 
 function from our ruby script. Add the following methods to the class definition:
 
 ```
+def update_function_code
+  zip_files
+  resp = @lambda_client.update_function_code({
+    function_name: "a93_message_handler", 
+    zip_file: File.open("#{@zip_filename}", "rb"),
+  })
+end
+
 def invoke(function_name)
   response = @lambda_client.invoke({
     function_name: function_name, 
@@ -1075,6 +1090,8 @@ def list_functions
 end
 ```
 
+The update_function_code updates our function with the new code. The function name 
+is hardcoded as it is the only function we are going to be working with for now.
 The invoke function sends a function name to invoke with invocation type set to
  "RequestResponse" which means we will wait for the execution to finish and the 
 `log_type` parameter is set to `Tail` meaning we will get the 'tail' of the log 
