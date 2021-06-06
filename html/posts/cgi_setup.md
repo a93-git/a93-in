@@ -1124,6 +1124,33 @@ each of the function in our account in the 'us-east-1' region
 We, now, need to add a trigger to the Lambda function so that it will get invoked 
 whenever an item in the table is modified. 
 
+In order to add a trigger (which we may need to do again if we ever need to delete and 
+redeploy this function) add the following method to the LambdaHandler class:
+
+```
+def create_trigger
+  response = @lambda_client.create_event_source_mapping({
+    event_source_arn:
+"arn:aws:dynamodb:us-east-1:979558485280:table/A93/stream/2021-06-06T05:26:27.307",
+    function_name: "a93_message_handler", 
+    enabled: true,
+    batch_size: 10,
+    maximum_batching_window_in_seconds: 1,
+    starting_position: "LATEST", 
+    maximum_record_age_in_seconds: 60,
+    bisect_batch_on_function_error: true,
+  })
+rescue Aws::Lambda::Errors::AccessDeniedException => e
+  puts "Error in adding target to the function"
+  puts e.message, e.class
+rescue Aws::Lambda::Errors::InvalidParameterValueException => e
+  puts "Error in adding target to the functions"
+  puts e.message, e.class
+ensure
+  response
+end
+
+```
 This marks the end of the deployment pipeline setup. Now we have everything we need 
 to deploy our functions. I am going to be working on building our actual lambda function 
 now. 
@@ -1195,7 +1222,7 @@ our messages are never going to be modified, thus, we don't need to know what th
  value was - because there isn't any. Once the stream is enabled, create a new 
 policy for lambda execution role and add the following statement:
 
-```
+``` 
 {
     "Version": "2012-10-17",
     "Statement": [
