@@ -1,0 +1,16 @@
+<html>
+  <%= @head_partial %>
+  <body>
+    <div id="outermost-div">
+      <%= @navbar_partial %>
+      <strong>Don't send me something you don't want to be sent unencrypted over the network</strong>
+      <form method="post" action="cgi-bin/contact.rb" formtarget=_top>
+        <input name="email" type="email" placeholder="Email (optional)">
+        <textarea name="message" required="required" autofocus="autofocus"
+                                                     placeholder="Message/suggestion/feedback/questions"></textarea>
+        <input type=submit value="Submit">
+      </form>
+    </div>
+  </body>
+</html>
+

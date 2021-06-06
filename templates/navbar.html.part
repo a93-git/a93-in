@@ -1,0 +1,9 @@
+<div id="navbar">
+  <div id="navbar-width">
+    <ul class="navbar-ul">
+      <li class="navbar-li"><a href="https://a93.in">write-ups</a></li>
+      <li class="navbar-li"><a href="https://a93.in/projects.html">projects</a></li>
+      <li class="navbar-li"><a href="https://a93.in/contact.html">contact</a></li>
+    </ul>
+  </div>
+</div>
