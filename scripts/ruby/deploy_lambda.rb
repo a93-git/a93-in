@@ -71,20 +71,27 @@ class LambdaHandler
     response = @lambda_client.list_functions
   end
 
+  def create_trigger
+    response = @lambda_client.create_event_source_mapping({
+      event_source_arn: "arn:aws:dynamodb:us-east-1:979558485280:table/A93/stream/2021-06-06T05:26:27.307",
+      function_name: "a93_message_handler", 
+      enabled: true,
+      batch_size: 10,
+      maximum_batching_window_in_seconds: 1,
+      starting_position: "LATEST", 
+      maximum_record_age_in_seconds: 60,
+      bisect_batch_on_function_error: true,
+    })
+  rescue Aws::Lambda::Errors::AccessDeniedException => e
+    puts "Error in adding target to the function"
+    puts e.message, e.class
+  rescue Aws::Lambda::Errors::InvalidParameterValueException => e
+    puts "Error in adding target to the functions"
+    puts e.message, e.class
+  ensure
+    response
+  end
+
   private :zip_files
 end
 
-lh = LambdaHandler.new("message_handler", "message_handling_lambda.rb")
-
-puts lh.update_function_code
-
-invoke_response = lh.invoke("a93_message_handler")
-puts "Tail log of Lambda invocation:"
-puts Base64.decode64(invoke_response[:log_result])
-
-puts 
-
-list_response = lh.list_functions
-list_response[:functions].each do |fun|
-  print "#{fun[:function_name]}\t#{fun[:function_arn]}\n"
-end
