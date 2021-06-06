@@ -1,15 +1,20 @@
 #!/usr/bin/ruby
 require "uri"
+require "uuid"
+require "./dynamohandler"
 
 request_body = URI.decode_www_form(gets.chomp).to_h
+handler = DynamoHandler.new("us-east-1", "A93")
+uuid = UUID.new
 
+message = {} 
 request_body.each do |k, v|
-  File.open(Time.now.to_s.gsub(" ", "_").gsub(":", "-").gsub("+", ""), 
-            File::APPEND | File::CREAT | File::WRONLY, 
-            0644) do |fh|
-    fh.write("#{k}:\n#{v}\n\n")
-  end
+  message[k] = v
 end
 
-puts "Content-Type: text/html\n\n"
-puts "Hello, World!"
+message["id"] = uuid.generate
+response = handler.put_item(message)
+
+
+puts "Content-type: text/html\n\n"
+puts response
