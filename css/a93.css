@@ -8,22 +8,37 @@ body {
   padding: 2vh;
 }
 
+a {
+  text-decoration: none;
+}
+
+a:hover {
+  color: black;
+  background: white;
+}
+
 p {
   width: 900px;
   align: center;
 }
 
-li a {
+p a {
   border: solid;
   border-color: indianred;
   border-width: thin;
+}
+
+p a:hover {
+  color: white;
+  background: indianred;
 }
 
 li {
   list-style-type: none;
   padding: 20px;
 }
-p a {
+
+li a {
   border: solid;
   border-color: indianred;
   border-width: thin;
@@ -41,6 +56,13 @@ code {
   font-size: 1em;
 }
 
+textarea, input {
+  display: block;
+  padding: 1vh;
+  margin: 3vh;
+  width: 80vw;
+}
+
 #outermost-div {
   padding: 40px;
 }
@@ -50,35 +72,27 @@ code {
   background: white;
 }
 
-a {
-  text-decoration: none;
-}
-
-a:hover {
-  color: black;
-  background: white;
-}
-
 .navbar-ul {
-	list-style-type: none;
-	overflow: hidden;
-	font-size: 64px;
-	font-weight: bold;
-	display: grid;
-	margin: 0;
-	padding: 0;
-	grid-template-columns: auto auto auto;
-	column-gap: 10px;
+  list-style-type: none;
+  overflow: hidden;
+  font-size: 64px;
+  font-weight: bold;
+  display: grid;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: auto auto auto;
+  column-gap: 10px;
 }
 
 .navbar-li {
-	justify-self: center;
+  justify-self: center;
 }
 
 .navbar-a {
-	display: block;
+  display: block;
 }
 
 .selected {
   color: gray;
 }
+
