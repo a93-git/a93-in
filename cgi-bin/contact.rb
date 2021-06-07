@@ -15,6 +15,4 @@ end
 message["id"] = uuid.generate
 response = handler.put_item(message)
 
-
-puts "Content-type: text/html\n"
-puts "Location: /index.html\n\n"
+puts "Location: https://a93.in\n\n"
