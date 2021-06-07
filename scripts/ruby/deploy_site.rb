@@ -116,7 +116,7 @@ Net::SSH.start("a93", "abhishek") do |ssh|
   puts "Output of file deletion on webserver", output, ""
 
   puts "Current files at webserver root path on remote server"
-  output = ssh.exec!("ls -la #{webserver_path}")
+  output = ssh.exec!("ls -lRa #{webserver_path}")
   puts output, ""
 
   puts "Checking for remote folders..."
@@ -132,7 +132,7 @@ Net::SSH.start("a93", "abhishek") do |ssh|
   end
 
   puts "Changing the ownership of files"
-  # output = ssh.exec!("sudo chown -R $USER:$USER #{webserver_path}; ls -laR #{webserver_path}")
+  output = ssh.exec!("chown -R $USER:$USER #{webserver_path}; ls -laR #{webserver_path}")
   puts output, "Done", ""
 end
 puts "Done checking for remote folders", ""
