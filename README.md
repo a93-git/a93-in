@@ -16,7 +16,7 @@ script to transfer the files to the webserver.
 Once the deployment script has run, refreshing the web page will show the 
 updated content.
 
-## `.scpconfig` file
+## `.scpconfig.json` file
 This file contains the files/directories that need to be scp'd to the remote 
 server. Each line is a separate entity to be transferred (either a file or a 
 directory). Directories don't end with a forward slash `/`. Each entity is a 
@@ -37,16 +37,16 @@ config file
 - [x] Create a template for the index page
 - [x] Generate the index page with the list of posts
 - [ ] Add created and updated information to the individual posts
-- [ ] Create a contact page template
+- [x] Create a contact page template
 - [x] Create a projects page template
 - [x] SCP files from local to remote
 - [x] Create and generate all the listings using templates
 - [x] Parse markdown to html
 - [x] Add provision to exclude files in .scpconfig
 - [ ] Add error handling to the link generator
-- [ ] Extract proper header files from the posts
+- [x] Extract proper header files from the posts
 - [ ] Fix the font size of the listings
 - [ ] Center the contents on all the pages
-- [ ] Add formatting to the HTML generated from the markdown
+- [x] Add formatting to the HTML generated from the markdown
 - [ ] Automatically add classes to the HTML generated from the markdown
-- [ ] Add navigation link to the posts page
+- [x] Add navigation link to the posts page
