@@ -12,6 +12,8 @@ scp_exclude_paths = config_json["exclude"]
 markdown_paths = config_json["markdown_paths"]
 webserver_path = config_json["webserver"]
 local_root = config_json["development"]["local_root"]
+ssh_username = config_json["ssh_username"]
+ssh_address = config_json["ssh_address"]
 
 load "#{local_root}/scripts/ruby/parse_markdown.rb"
 load "#{local_root}/scripts/ruby/generate_file_tree.rb"
@@ -70,6 +72,12 @@ end
 puts "Rendering contact page"
 contact_obj = RenderContactPage.new
 File.open("#{local_root}/contact.html", "w") do |fp|
+  fp.write(contact_obj.render)
+end
+
+puts "Rendering reading list page"
+contact_obj = RenderReadingListPage.new
+File.open("#{local_root}/reading_list.html", "w") do |fp|
   fp.write(contact_obj.render)
 end
 
@@ -140,7 +148,7 @@ puts "Done checking for remote folders", ""
 # scp files from local to remote system
 puts "Copying files to the webserver"
 transfer = {}
-Net::SCP.start("a93", "abhishek") do |scp|
+Net::SCP.start(ssh_address, ssh_username) do |scp|
   files_to_scp.each do |line|
     puts line
     path = line.split
@@ -148,7 +156,7 @@ Net::SCP.start("a93", "abhishek") do |scp|
     # The file transfer is in blocking fashion
     # Using asynchronous version (removing the ! from the method name will 
     # cause it to throw an Exception
-    scp.upload!(path[0], path[1], :recursive => true) do |ch, name, sent, total|
+    scp.upload(path[0], path[1], :recursive => true) do |ch, name, sent, total|
       transfer[name] = "#{sent}/#{total}"
       print "#{name}: #{sent}/#{total}                 "
       STDOUT.goto_column(0)
