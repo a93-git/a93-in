@@ -7,8 +7,8 @@
     "html",
     "projects.html",
     "contact.html",
-    "form.rb",
-    "cgi-bin"
+    "cgi-bin",
+    "reading_list.html"
   ],
 
   "exclude": [
@@ -29,5 +29,7 @@
 
     "development": {
       "local_root": "/home/abhishek/a93-in"
-    }
+    },
+    "ssh_username": "abhishek",
+    "ssh_address": "a93"
 }
