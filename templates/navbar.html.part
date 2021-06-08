@@ -1,8 +1,9 @@
 <div id="navbar">
   <div id="navbar-width">
     <ul class="navbar-ul">
-      <li class="navbar-li"><a href="/index.html">write-ups</a></li>
+      <li class="navbar-li selected"><a href="/index.html">write-ups</a></li>
       <li class="navbar-li"><a href="/projects.html">projects</a></li>
+      <li class="navbar-li"><a href="/reading_list.html">reading list</a></li>
       <li class="navbar-li"><a href="/contact.html">contact</a></li>
     </ul>
   </div>
