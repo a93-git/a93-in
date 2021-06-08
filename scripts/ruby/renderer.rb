@@ -62,6 +62,18 @@ class RenderContactPage
   end
 end
 
+class RenderReadingListPage
+  def initialize()
+    @template = ERB.new(File.open("templates/reading_list.html.erb").read)
+    @head_partial = File.open("templates/head.html.part").read
+    @navbar_partial = File.open("templates/navbar.html.part").read
+  end
+
+  def render
+    @template.result binding
+  end
+end
+
 class RenderPostsPage
   def initialize(path)
     @template = ERB.new(File.open("templates/posts.html.erb").read)
